@@ -145,18 +145,37 @@ def create_healthmate_pdf(report_text, report_type="Clinical Pathology Analysis"
     )
     return bytes(pdf.output())
 
-# 6. Session State Management (ChatGPT-Style Multi-Chat History)
-if "sessions" not in st.session_state:
-    # Initialize with Session 1
-    init_id = "Session 1"
-    st.session_state.sessions = {
-        init_id: {
+# 6. Session State Management with Persistence (survives refresh)
+import json
+
+SESSIONS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sessions_data.json")
+
+def load_sessions():
+    if os.path.exists(SESSIONS_FILE):
+        try:
+            with open(SESSIONS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {
+        "Session 1": {
             "title": "General Health Consultation",
             "messages": [],
-            "last_analysis": None
+            "last_analysis": None,
+            "doctor_note": None
         }
     }
-    st.session_state.current_session_id = init_id
+
+def save_sessions(sessions_dict):
+    try:
+        with open(SESSIONS_FILE, "w", encoding="utf-8") as f:
+            json.dump(sessions_dict, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+if "sessions" not in st.session_state:
+    st.session_state.sessions = load_sessions()
+    st.session_state.current_session_id = list(st.session_state.sessions.keys())[0]
 
 if "current_session_id" not in st.session_state:
     st.session_state.current_session_id = list(st.session_state.sessions.keys())[0]
@@ -529,51 +548,61 @@ if active_prompt:
         emergency_reason = active_prompt
 
 if is_emergency_triggered:
-    with st.container(border=True):
-        st.error("🚨 **CRITICAL MEDICAL EMERGENCY DETECTED!**")
-        st.markdown(
-            "HealthMate has activated the **Emergency SOS Dispatch**. "
-            "Please remain calm, sit down, keep doors unlocked for first responders, and immediately notify your emergency contacts below:"
-        )
+    st.markdown(
+        f"""
+        <div style="background-color:#fff3cd;border:2px solid #e53e3e;border-radius:10px;padding:18px;margin-bottom:14px;">
+            <h3 style="color:#c0392b;margin-top:0;">🚨 CRITICAL MEDICAL EMERGENCY DETECTED!</h3>
+            <p style="color:#333333;font-size:15px;margin-bottom:6px;">
+                HealthMate ne <strong>Emergency SOS Dispatch</strong> activate kar diya hai.<br>
+                Shant rahe, darwaza khula rakhe aur neeche apne contacts ko SOS bhejo:
+            </p>
+            <p style="color:#111111;font-size:14px;"><strong>Reason:</strong> {emergency_reason}</p>
+            <p style="color:#c0392b;font-size:14px;font-weight:bold;">
+                📞 Abhi call karo: 112 (National Emergency) ya 108 (Ambulance)
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
-        now_str = datetime.datetime.now().strftime("%d %b %Y, %I:%M %p")
-        sos_message = (
-            "🚨 *URGENT MEDICAL SOS ALERT via HealthMate AI*\n\n"
-            f"⚠️ *Situation:* {emergency_reason}\n"
-            f"⏰ *Time:* {now_str}\n"
-            "📍 *Status:* Patient requires immediate medical assistance / family presence.\n\n"
-            "📞 *Emergency Services:* Dial 112 (National Emergency) or 108 (Ambulance) immediately!\n"
-            "— Sent via HealthMate Personal Safety System"
-        )
+    now_str = datetime.datetime.now().strftime("%d %b %Y, %I:%M %p")
+    sos_message = (
+        "🚨 *URGENT MEDICAL SOS ALERT via HealthMate AI*\n\n"
+        f"⚠️ *Situation:* {emergency_reason}\n"
+        f"⏰ *Time:* {now_str}\n"
+        "📍 *Status:* Patient requires immediate medical assistance / family presence.\n\n"
+        "📞 *Emergency Services:* Dial 112 (National Emergency) or 108 (Ambulance) immediately!\n"
+        "— Sent via HealthMate Personal Safety System"
+    )
 
-        # Contact 1 WhatsApp Button
-        col_wa1, col_wa2, col_call = st.columns(3)
-        c1_name = st.session_state.get("sos_name1", "Contact 1")
-        c1_num = st.session_state.get("sos_num1", "")
-        if c1_num:
-            wa_url_1 = get_whatsapp_sos_url(c1_num, sos_message)
-            with col_wa1:
-                st.markdown(
-                    f'<a href="{wa_url_1}" target="_blank" style="display:block; text-align:center; background-color:#25D366; color:white; padding:10px; border-radius:8px; text-decoration:none; font-weight:bold;">📲 WhatsApp SOS: {c1_name}</a>',
-                    unsafe_allow_html=True
-                )
-
-        # Contact 2 WhatsApp Button
-        c2_name = st.session_state.get("sos_name2", "Contact 2")
-        c2_num = st.session_state.get("sos_num2", "")
-        if c2_num:
-            wa_url_2 = get_whatsapp_sos_url(c2_num, sos_message)
-            with col_wa2:
-                st.markdown(
-                    f'<a href="{wa_url_2}" target="_blank" style="display:block; text-align:center; background-color:#25D366; color:white; padding:10px; border-radius:8px; text-decoration:none; font-weight:bold;">📲 WhatsApp SOS: {c2_name}</a>',
-                    unsafe_allow_html=True
-                )
-
-        with col_call:
+    col_wa1, col_wa2, col_call = st.columns(3)
+    c1_name = st.session_state.get("sos_name1", "Contact 1")
+    c1_num = st.session_state.get("sos_num1", "")
+    if c1_num:
+        wa_url_1 = get_whatsapp_sos_url(c1_num, sos_message)
+        with col_wa1:
             st.markdown(
-                '<a href="tel:112" style="display:block; text-align:center; background-color:#e53e3e; color:white; padding:10px; border-radius:8px; text-decoration:none; font-weight:bold;">📞 Call 112 (Ambulance)</a>',
+                f'<a href="{wa_url_1}" target="_blank" style="display:block; text-align:center; background-color:#25D366; color:white; padding:10px; border-radius:8px; text-decoration:none; font-weight:bold;">📲 WhatsApp SOS: {c1_name}</a>',
                 unsafe_allow_html=True
             )
+
+    # Contact 2 WhatsApp Button
+    c2_name = st.session_state.get("sos_name2", "Contact 2")
+    c2_num = st.session_state.get("sos_num2", "")
+    if c2_num:
+        wa_url_2 = get_whatsapp_sos_url(c2_num, sos_message)
+        with col_wa2:
+            st.markdown(
+                f'<a href="{wa_url_2}" target="_blank" style="display:block; text-align:center; background-color:#25D366; color:white; padding:10px; border-radius:8px; text-decoration:none; font-weight:bold;">📲 WhatsApp SOS: {c2_name}</a>',
+                unsafe_allow_html=True
+            )
+
+    with col_call:
+        st.markdown(
+            '<a href="tel:112" style="display:block; text-align:center; background-color:#e53e3e; color:white; padding:10px; border-radius:8px; text-decoration:none; font-weight:bold;">📞 Call 112 (Ambulance)</a>',
+            unsafe_allow_html=True
+        )
+
 
 # 15. Replay Existing Messages
 st.markdown("---")
@@ -618,6 +647,7 @@ if active_prompt:
 
             answer = st.write_stream(response_generator())
             curr_session["messages"].append({"role": "model", "content": answer})
+            save_sessions(st.session_state.sessions)  # persist after every reply
 
         except APIError as e:
             if any(code in str(e) for code in ["400", "401", "403"]):
