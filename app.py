@@ -148,7 +148,8 @@ def create_healthmate_pdf(report_text, report_type="Clinical Pathology Analysis"
 # 6. Session State Management with Persistence (survives refresh)
 import json
 
-SESSIONS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sessions_data.json")
+import tempfile
+SESSIONS_FILE = os.path.join(tempfile.gettempdir(), "healthmate_sessions.json")
 
 def load_sessions():
     if os.path.exists(SESSIONS_FILE):
@@ -550,15 +551,17 @@ if active_prompt:
 if is_emergency_triggered:
     st.markdown(
         f"""
-        <div style="background-color:#fff3cd;border:2px solid #e53e3e;border-radius:10px;padding:18px;margin-bottom:14px;">
-            <h3 style="color:#c0392b;margin-top:0;">🚨 CRITICAL MEDICAL EMERGENCY DETECTED!</h3>
-            <p style="color:#333333;font-size:15px;margin-bottom:6px;">
-                HealthMate ne <strong>Emergency SOS Dispatch</strong> activate kar diya hai.<br>
-                Shant rahe, darwaza khula rakhe aur neeche apne contacts ko SOS bhejo:
+        <div style="background-color:#fff3cd !important;border:3px solid #e53e3e !important;border-radius:12px;padding:20px;margin-bottom:16px;">
+            <h3 style="color:#c0392b !important;margin-top:0 !important;font-size:20px !important;">🚨 CRITICAL MEDICAL EMERGENCY DETECTED!</h3>
+            <p style="color:#1a1a1a !important;font-size:15px !important;margin-bottom:8px !important;">
+                HealthMate ne <strong style="color:#1a1a1a !important;">Emergency SOS Dispatch</strong> activate kar diya hai.<br>
+                Shant rahe, darwaza khula rakhe aur neeche contacts ko SOS bhejo:
             </p>
-            <p style="color:#111111;font-size:14px;"><strong>Reason:</strong> {emergency_reason}</p>
-            <p style="color:#c0392b;font-size:14px;font-weight:bold;">
-                📞 Abhi call karo: 112 (National Emergency) ya 108 (Ambulance)
+            <p style="color:#1a1a1a !important;font-size:14px !important;background:#ffe0e0 !important;padding:8px !important;border-radius:6px !important;">
+                <strong style="color:#c0392b !important;">Reason:</strong> {emergency_reason}
+            </p>
+            <p style="color:#c0392b !important;font-size:15px !important;font-weight:bold !important;margin-bottom:0 !important;">
+                📞 Abhi call karo: <strong style="color:#c0392b !important;">112</strong> (National Emergency) ya <strong style="color:#c0392b !important;">108</strong> (Ambulance)
             </p>
         </div>
         """,
