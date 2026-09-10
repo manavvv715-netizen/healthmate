@@ -1,5 +1,6 @@
 ﻿import os
 import re
+import urllib.parse
 import datetime
 import streamlit as st
 from PIL import Image
@@ -9,70 +10,49 @@ from google import genai
 from google.genai import types
 from google.genai.errors import APIError
 
-# 1. Environment & Key
+# 1. Environment & Key Setup
 load_dotenv()
 api_key = os.getenv("GEMINI_API_KEY")
 
 # 2. Page Configuration
 st.set_page_config(
-    page_title="HealthMate - AI Health & Report Intelligence",
+    page_title="HealthMate AI - Clinical Health Intelligence",
     page_icon="🩺",
-    layout="centered",
-    initial_sidebar_state="collapsed"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# 3. Custom CSS for Professional Card Styling
+# 3. Custom CSS for Modern Hospital-Grade UI Cards
 st.markdown("""
 <style>
     .metric-card {
         background-color: #f8f9fa;
         border-radius: 10px;
-        padding: 16px;
+        padding: 14px;
         border-left: 5px solid #0066cc;
-        margin-bottom: 12px;
-    }
-    .alert-high {
-        background-color: #fff5f5;
-        border-radius: 10px;
-        padding: 16px;
-        border-left: 5px solid #e53e3e;
-        margin-bottom: 12px;
-    }
-    .alert-normal {
-        background-color: #f0fff4;
-        border-radius: 10px;
-        padding: 16px;
-        border-left: 5px solid #38a169;
-        margin-bottom: 12px;
-    }
-    .alert-diet {
-        background-color: #fefcbf;
-        border-radius: 10px;
-        padding: 16px;
-        border-left: 5px solid #d69e2e;
-        margin-bottom: 12px;
+        margin-bottom: 10px;
     }
     .stDownloadButton>button {
         width: 100%;
-        background-color: #0066cc;
-        color: white;
+        background-color: #0066cc !important;
+        color: white !important;
         font-weight: bold;
-        padding: 12px;
+        padding: 10px;
         border-radius: 8px;
+    }
+    .chat-session-btn {
+        text-align: left;
+        margin-bottom: 4px;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# 4. Header Banner
-st.title("HealthMate 🩺")
-st.caption("AI-Powered Clinical Health Assistant - Smart Lab Reports, Medicine Scanner & First-Aid")
-
-# 5. API Key Check
+# 4. API Key Verification
 if not api_key:
     st.error("⚠️ GEMINI_API_KEY is missing! Set it in your .env or Streamlit Cloud Secrets.")
     st.stop()
 
-# 6. Gemini Client
+# 5. Initialize Gemini Client
 try:
     client = genai.Client(
         api_key=api_key,
@@ -85,23 +65,20 @@ except Exception as e:
 CHAT_MODEL = "gemini-3.5-flash-lite"
 VISION_MODEL = "gemini-3.6-flash"
 
-# Helper: Clean text for PDF (Removes emojis and non-standard symbols)
+# Helper: Clean text for PDF (Guarantees Zero Emojis or weird symbols)
 def clean_for_pdf(text):
     if not text:
         return ""
-    # Strip emojis and keep standard printable ascii/latin1 characters
     clean = re.sub(r'[^\x20-\x7E\n\r\t]', '', text)
-    # Remove markdown asterisks and hashtags for clean printout
     clean = clean.replace("**", "").replace("###", "").replace("##", "").replace("#", "")
     return clean
 
-# Helper: Generate Clean Professional HealthMate PDF
-def create_healthmate_pdf(report_text, report_type="Clinical Pathology Report"):
+# Helper: PDF Generation
+def create_healthmate_pdf(report_text, report_type="Clinical Pathology Analysis"):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
 
-    # Top Brand Header
     pdf.set_font('Helvetica', 'B', 18)
     pdf.set_text_color(18, 65, 120)
     pdf.cell(0, 10, 'HEALTHMATE AI CLINICAL INTELLIGENCE', new_x="LMARGIN", new_y="NEXT", align='C')
@@ -116,7 +93,6 @@ def create_healthmate_pdf(report_text, report_type="Clinical Pathology Report"):
     pdf.line(10, 33, 200, 33)
     pdf.ln(8)
 
-    # Meta Info Box
     pdf.set_font('Helvetica', 'B', 10)
     pdf.set_text_color(50, 50, 50)
     current_date = datetime.datetime.now().strftime("%d %B %Y, %I:%M %p")
@@ -124,14 +100,12 @@ def create_healthmate_pdf(report_text, report_type="Clinical Pathology Report"):
     pdf.cell(90, 6, f'Generated On: {current_date}', new_x="LMARGIN", new_y="NEXT", align='R')
     pdf.ln(4)
 
-    # Content Body
     pdf.set_font('Helvetica', '', 10)
     pdf.set_text_color(30, 30, 30)
 
     cleaned_body = clean_for_pdf(report_text)
     pdf.multi_cell(0, 5.5, cleaned_body)
 
-    # Bottom Footer & Promotional Disclaimer
     pdf.ln(6)
     pdf.set_draw_color(200, 200, 200)
     pdf.set_line_width(0.3)
@@ -147,16 +121,60 @@ def create_healthmate_pdf(report_text, report_type="Clinical Pathology Report"):
         "these findings to a certified physician for medical diagnosis and clinical treatment.\n"
         "(c) 2026 HealthMate AI Technologies. All rights reserved."
     )
-
     return bytes(pdf.output())
 
-# 7. Sidebar: Tools & Safety Controls
+# 6. Session State Management (ChatGPT-Style Multi-Chat History)
+if "sessions" not in st.session_state:
+    # Initialize with Session 1
+    init_id = "Session 1"
+    st.session_state.sessions = {
+        init_id: {
+            "title": "General Health Consultation",
+            "messages": [],
+            "last_analysis": None
+        }
+    }
+    st.session_state.current_session_id = init_id
+
+if "current_session_id" not in st.session_state:
+    st.session_state.current_session_id = list(st.session_state.sessions.keys())[0]
+
+curr_session = st.session_state.sessions[st.session_state.current_session_id]
+
+# 7. Sidebar: Sessions, Language & Health Tools
 with st.sidebar:
-    st.header("⚙️ Health Tools")
-    quiz_mode = st.toggle("Health Quiz Mode 🧠", value=False)
+    st.title("HealthMate 🩺")
+
+    # New Chat Button
+    if st.button("➕ New Consultation", use_container_width=True, type="primary"):
+        new_idx = len(st.session_state.sessions) + 1
+        new_id = f"Session {new_idx}"
+        st.session_state.sessions[new_id] = {
+            "title": f"Consultation #{new_idx}",
+            "messages": [],
+            "last_analysis": None
+        }
+        st.session_state.current_session_id = new_id
+        st.rerun()
+
+    # Multi-Language Selector (Indian Accessibility Feature)
+    selected_lang = st.selectbox(
+        "🌐 Consultation Language:",
+        ["English", "हिन्दी (Hindi)", "ગુજરાતી (Gujarati)", "Hinglish"],
+        index=0
+    )
 
     st.markdown("---")
-    st.subheader("📊 Quick BMI Calculator")
+    st.subheader("💬 Past Consultations")
+    for s_id, s_data in list(st.session_state.sessions.items()):
+        is_active = (s_id == st.session_state.current_session_id)
+        prefix = "👉 " if is_active else "💬 "
+        if st.button(f"{prefix}{s_data['title']}", key=f"btn_{s_id}", use_container_width=True):
+            st.session_state.current_session_id = s_id
+            st.rerun()
+
+    st.markdown("---")
+    st.subheader("📊 Interactive BMI Calculator")
     height_cm = st.slider("Height (cm)", min_value=120, max_value=220, value=170)
     weight_kg = st.slider("Weight (kg)", min_value=30, max_value=150, value=65)
 
@@ -170,10 +188,13 @@ with st.sidebar:
     else:
         bmi_status = "Obese 🔴"
 
-    st.metric(label="Your BMI", value=bmi, delta=bmi_status)
+    st.metric(label="Your BMI Score", value=bmi, delta=bmi_status)
 
-    if st.button("🥗 Ask Diet Plan for My BMI", use_container_width=True):
-        st.session_state.bmi_prompt = f"My height is {height_cm}cm, weight is {weight_kg}kg, and BMI is {bmi} ({bmi_status}). Suggest a healthy Indian diet and fitness routine."
+    if st.button("🥗 Get Diet Plan for My BMI", use_container_width=True):
+        st.session_state.triggered_prompt = f"My height is {height_cm}cm, weight is {weight_kg}kg, and BMI is {bmi} ({bmi_status}). Suggest a healthy Indian diet and fitness routine."
+
+    st.markdown("---")
+    quiz_mode = st.toggle("Health Quiz Mode 🧠", value=False)
 
     st.markdown("---")
     st.subheader("🚨 Emergency Helpline (India)")
@@ -184,47 +205,93 @@ with st.sidebar:
     )
 
     st.markdown("---")
-    st.markdown("### 🛡️ Medical Disclaimer")
-    st.info(
-        "HealthMate is an educational tool. "
-        "It does not replace professional clinical diagnosis. "
-        "Always consult a registered medical doctor."
-    )
-
-    st.markdown("---")
-    if st.button("🗑️ Clear Chat History", use_container_width=True):
-        st.session_state.messages = []
-        st.session_state.last_analysis = None
+    if st.button("🗑️ Clear This Chat", use_container_width=True):
+        curr_session["messages"] = []
+        curr_session["last_analysis"] = None
         st.rerun()
 
-# 8. System Prompt
-BASE_PROMPT = """
-You are HealthMate, an empathetic, highly knowledgeable medical first-aid and clinical wellness assistant.
-Role: First-aid advisor, lab report explainer, and wellness guide.
-Task: Explain symptoms, first-aid remedies, blood test/lab reports, diet, and healthy lifestyle habits.
+# 8. Dynamic System Prompt with Language Injection
+LANG_INSTRUCTION = f"Respond primarily in {selected_lang}. Ensure medical guidance is culturally relevant for Indian patients."
+
+BASE_PROMPT = f"""
+You are HealthMate, an empathetic, clinical health and wellness AI assistant.
+Language Rule: {LANG_INSTRUCTION}
+Role: First-aid advisor, lab report explainer, triage specialist, and wellness companion.
+Task: Explain symptoms, blood test/lab reports, diet, and healthy lifestyle habits.
 Rules:
-- Give clear, structured responses with headings and bullet points.
-- STRICT INDIAN EMERGENCY PROTOCOL: If symptoms sound severe or life-threatening (e.g. acute chest pain, breathing difficulty, stroke symptoms, heavy bleeding), strictly advise calling 112 (National Emergency) or 108/102 (Ambulance). Never mention 911.
+- Keep explanations clear, structured, and easy to understand.
+- STRICT INDIAN EMERGENCY PROTOCOL: If symptoms sound severe (chest pain, breathlessness, stroke signs, severe hemorrhage), strictly advise calling 112 (National Emergency) or 108/102 (Ambulance). NEVER mention 911 under any circumstances.
 - Say 'I am not sure' if unsure, and redirect off-topic questions back to health.
-- End your response with one caring check-in question.
+- Always end with a caring follow-up question.
 """
 
 if quiz_mode:
     SYSTEM_INSTRUCTION = (
         BASE_PROMPT
-        + "\n\nQUIZ MODE ACTIVE: After your response, ask 1 multiple-choice health question (with options A, B, C, D). Only ask one at a time."
+        + "\n\nQUIZ MODE ACTIVE: After your response, ask 1 multiple-choice health quiz question (options A, B, C, D) in the chosen language."
     )
 else:
     SYSTEM_INSTRUCTION = BASE_PROMPT
 
-# 9. Memory Setup
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-if "last_analysis" not in st.session_state:
-    st.session_state.last_analysis = None
+# 9. Main Header
+st.title("HealthMate 🩺")
+st.caption(f"Active Consultation: **{curr_session['title']}** | Language: **{selected_lang}**")
 
-# 10. Multimodal Feature: Lab Report & Medicine Scanner
-with st.expander("🔬 Scan Lab Report (Blood/Lipid/Sugar) or Medicine Strip", expanded=True):
+# 10. OUT-OF-THE-BOX FEATURE 1: Interactive Visual Body Triage
+st.markdown("### 🧍‍♂️ Visual Symptom Triage (Where does it hurt?)")
+st.write("Click on a body zone for instant targeted clinical triage:")
+
+triage_cols = st.columns(4)
+triage_prompt = None
+
+if triage_cols[0].button("🧠 Head / Migraine", use_container_width=True):
+    triage_prompt = "I have a headache and head heaviness. Differentiate between tension headache and migraine, and suggest safe immediate relief."
+if triage_cols[1].button("🫀 Chest / Discomfort", use_container_width=True):
+    triage_prompt = "I feel discomfort in my chest. Explain the difference between acidity/heartburn vs cardiac chest pain, and emergency warning signs."
+if triage_cols[2].button("🫄 Stomach / Digestion", use_container_width=True):
+    triage_prompt = "I have stomach cramps and bloating after eating. What home care and diet precautions should I follow right now?"
+if triage_cols[3].button("🦵 Joints / Muscle Sprain", use_container_width=True):
+    triage_prompt = "I twisted my ankle/leg and have swelling. Explain the standard RICE first-aid method step-by-step."
+
+# 11. OUT-OF-THE-BOX FEATURE 2: Drug-Drug & Food Interaction Checker
+with st.expander("⚠️ Drug-Drug & Food Interaction Conflict Checker", expanded=False):
+    st.write("Check if two medicines or a food item can dangerously interact when taken together:")
+    col_d1, col_d2 = st.columns(2)
+    with col_d1:
+        med1 = st.text_input("First Medicine / Supplement (e.g. Disprin, Paracetamol, Thyronorm)", key="med1_input")
+    with col_d2:
+        med2 = st.text_input("Second Medicine or Food/Drink (e.g. Ibuprofen, Blood Thinner, Milk, Chai)", key="med2_input")
+
+    if st.button("⚡ Check Drug & Food Safety Conflict", type="primary", use_container_width=True):
+        if med1 and med2:
+            conflict_query = (
+                f"Clinical Drug Interaction Check: Can a patient take '{med1}' together with '{med2}'? "
+                "Analyze:\n"
+                "1. Safety Status: [🔴 High Risk Conflict / 🟡 Moderate Caution / 🟢 Safe to Combine]\n"
+                "2. Mechanism: Why do they interact or interfere?\n"
+                "3. Safe Timing: How many hours gap should be kept, or should combination be completely avoided?\n"
+                "4. Indian dietary precaution (e.g. taking with water vs milk vs empty stomach)."
+            )
+            with st.spinner("Screening clinical pharmacology interactions..."):
+                try:
+                    conflict_res = client.models.generate_content(
+                        model=CHAT_MODEL,
+                        contents=conflict_query,
+                        config=types.GenerateContentConfig(
+                            system_instruction=BASE_PROMPT,
+                            temperature=0.4
+                        )
+                    )
+                    st.markdown(conflict_res.text)
+                    curr_session["messages"].append({"role": "user", "content": f"⚠️ Interaction Check: {med1} + {med2}"})
+                    curr_session["messages"].append({"role": "model", "content": conflict_res.text})
+                except Exception as ex:
+                    st.error(f"Interaction check error: {ex}")
+        else:
+            st.warning("Please enter both medicine/food names to run the interaction check.")
+
+# 12. Multimodal Lab Report & Medicine Scanner
+with st.expander("🔬 Scan Lab Report (Blood/Lipid/Sugar) or Medicine Strip", expanded=False):
     st.write("Upload or photograph a **Blood Test Report, Lipid Profile, or Medicine Strip**:")
 
     scan_type = st.radio(
@@ -250,16 +317,16 @@ with st.expander("🔬 Scan Lab Report (Blood/Lipid/Sugar) or Medicine Strip", e
             with st.spinner("Analyzing laboratory values, reference ranges, and clinical details..."):
                 try:
                     if "Blood" in scan_type:
-                        vision_prompt = """
-You are an expert clinical pathologist and physician assistant.
-Analyze this medical/laboratory test report thoroughly. Organize your response into these exact 5 sections:
+                        vision_prompt = f"""
+You are an expert clinical pathologist. Language: {selected_lang}.
+Analyze this laboratory report thoroughly. Organize your response into these exact 5 sections:
 
 ### 1. Test Overview & Identification
 State the test type (e.g. Lipid Profile, Complete Blood Count, Liver Function) and key patient parameters detected.
 
 ### 2. High & Elevated Parameters (Needs Immediate Attention)
 - For every parameter that is ABOVE normal, list: Parameter Name, Detected Value, Normal Reference Range.
-- Explain in simple terms why it is high and what health risk it presents (e.g. risk to arteries, heart, liver).
+- Explain in simple terms why it is high and what health risk it presents.
 
 ### 3. Normal & Optimal Parameters
 - List parameters that are safely within reference ranges.
@@ -273,8 +340,8 @@ State the test type (e.g. Lipid Profile, Complete Blood Count, Liver Function) a
 - 2-3 specific questions the patient should ask their treating doctor during follow-up.
 """
                     else:
-                        vision_prompt = """
-You are a pharmacist and medical assistant. Analyze this medicine or prescription image:
+                        vision_prompt = f"""
+You are a clinical pharmacist. Language: {selected_lang}. Analyze this medicine image:
 
 ### 1. Medicine Name & Salt Composition
 Active ingredients, salt name, and strength.
@@ -283,7 +350,7 @@ Active ingredients, salt name, and strength.
 What disease, symptom, or infection this medication treats.
 
 ### 3. Important Safety Precautions & Warnings
-Contraindications, key side-effects, interactions.
+Contraindications, key side-effects, food interactions.
 
 ### 4. Dosage & Administration Notice
 Strict reminder to only follow the treating doctor's prescribed dosage and timing.
@@ -292,19 +359,21 @@ Strict reminder to only follow the treating doctor's prescribed dosage and timin
                         model=VISION_MODEL,
                         contents=[pil_img, vision_prompt]
                     )
-                    st.session_state.last_analysis = res.text
-                    st.session_state.messages.append({"role": "model", "content": f"🔬 **Document Analysis Result:**\n\n{res.text}"})
+                    curr_session["last_analysis"] = res.text
+                    curr_session["messages"].append({"role": "model", "content": f"🔬 **Document Analysis Result:**\n\n{res.text}"})
+
+                    # Auto-update session title based on test
+                    curr_session["title"] = "Lab Report Analysis"
 
                 except Exception as ex:
                     st.error(f"Analysis error: {ex}")
 
-# 11. DISPLAY ANALYSIS IN PROFESSIONAL CARD FORMAT & PDF DOWNLOAD
-if st.session_state.last_analysis:
-    analysis_text = st.session_state.last_analysis
+# 13. Display Clinical Cards & Clean PDF Download
+if curr_session["last_analysis"]:
+    analysis_text = curr_session["last_analysis"]
     st.markdown("---")
     st.subheader("📋 Official HealthMate Clinical Analysis Card")
 
-    # Display in clean separated cards
     sections = re.split(r'###\s+', analysis_text)
     for sec in sections:
         sec = sec.strip()
@@ -315,22 +384,20 @@ if st.session_state.last_analysis:
         body = lines[1].strip() if len(lines) > 1 else ""
 
         with st.container(border=True):
-            if "High" in title or "Elevated" in title or "Attention" in title:
+            if any(w in title for w in ["High", "Elevated", "Attention"]):
                 st.error(f"🚨 **{title}**")
-            elif "Normal" in title or "Optimal" in title:
+            elif any(w in title for w in ["Normal", "Optimal"]):
                 st.success(f"✅ **{title}**")
-            elif "Diet" in title or "Lifestyle" in title:
+            elif any(w in title for w in ["Diet", "Lifestyle"]):
                 st.warning(f"🥗 **{title}**")
-            elif "Doctor" in title or "Precautions" in title:
+            elif any(w in title for w in ["Doctor", "Precautions"]):
                 st.info(f"👨‍⚕️ **{title}**")
             else:
                 st.markdown(f"### 📋 {title}")
-            
             st.markdown(body)
 
-    # Clean PDF Download Button with HealthMate Branding (Zero Emojis inside PDF)
+    # Clean PDF Download Button (Zero Emojis inside PDF)
     pdf_bytes = create_healthmate_pdf(analysis_text, report_type="Clinical Pathology Analysis")
-
     st.download_button(
         label="📥 Download Official HealthMate Analysis Report (PDF)",
         data=pdf_bytes,
@@ -340,36 +407,67 @@ if st.session_state.last_analysis:
     )
     st.caption("📄 Clean, print-ready PDF without emojis, fully formatted with HealthMate clinical headers.")
 
-# 12. Quick Action Chips
-st.write("**⚡ Quick Topics:**")
-chip_cols = st.columns(4)
-quick_prompt = None
+# 14. OUT-OF-THE-BOX FEATURE 3: Doctor Handover Note & WhatsApp Share
+st.markdown("---")
+col_note1, col_note2 = st.columns([3, 1])
+with col_note1:
+    st.write("**👨‍⚕️ Preparing to visit a Doctor?** Generate a concise clinical summary note to share on WhatsApp:")
+with col_note2:
+    if st.button("📋 Generate Doctor Handover Note", use_container_width=True):
+        if curr_session["messages"]:
+            summary_prompt = (
+                "Summarize this patient conversation into a concise 'Doctor Clinical Handover Note':\n"
+                "- Chief Complaints & Duration\n"
+                "- Key Lab Findings or Medicines Discussed\n"
+                "- Vitals/BMI (if mentioned)\n"
+                "- Questions to ask the Doctor\n"
+                "Format cleanly as bullet points for quick physician reading."
+            )
+            all_msgs = [f"{m['role']}: {m['content']}" for m in curr_session["messages"][-6:]]
+            note_res = client.models.generate_content(
+                model=CHAT_MODEL,
+                contents="\n".join(all_msgs) + "\n\n" + summary_prompt
+            )
+            st.session_state.doctor_note = note_res.text
+        else:
+            st.warning("Please chat or analyze a report first so a handover note can be generated.")
 
-if chip_cols[0].button("🩹 Minor Cut/Burn", use_container_width=True):
-    quick_prompt = "Quick first aid steps for a minor burn or cut."
-if chip_cols[1].button("🤕 Headache & Fever", use_container_width=True):
-    quick_prompt = "Home remedies and first aid for a mild headache and fever."
-if chip_cols[2].button("🧘 Stress Relief", use_container_width=True):
-    quick_prompt = "Give a 1-minute calming breathing exercise for anxiety."
-if chip_cols[3].button("💧 Hydration & Gut", use_container_width=True):
-    quick_prompt = "3 essential daily hydration and gut health tips."
+if "doctor_note" in st.session_state and st.session_state.doctor_note:
+    with st.container(border=True):
+        st.markdown("#### 🩺 Doctor Pre-Consultation Summary Note")
+        st.markdown(st.session_state.doctor_note)
+        encoded_text = urllib.parse.quote(st.session_state.doctor_note)
+        wa_url = f"https://api.whatsapp.com/send?text={encoded_text}"
+        st.markdown(
+            f'<a href="{wa_url}" target="_blank" style="display:inline-block; background-color:#25D366; color:white; padding:8px 16px; border-radius:6px; text-decoration:none; font-weight:bold;">📲 Share with Doctor on WhatsApp</a>',
+            unsafe_allow_html=True
+        )
 
-# Check if BMI button was clicked
-if "bmi_prompt" in st.session_state and st.session_state.bmi_prompt:
-    quick_prompt = st.session_state.bmi_prompt
-    st.session_state.bmi_prompt = None
-
-# 13. Replay Existing Conversation
-for msg in st.session_state.messages:
+# 15. Replay Existing Messages
+st.markdown("---")
+st.subheader("💬 Active Consultation Chat")
+for msg in curr_session["messages"]:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# 14. Chat Input and Streaming Generation
+# 16. Chat Input and Streaming Generation
 user_input = st.chat_input("Ask a health, lab report, or wellness question...")
-active_prompt = quick_prompt if quick_prompt else user_input
+
+active_prompt = None
+if "triggered_prompt" in st.session_state and st.session_state.triggered_prompt:
+    active_prompt = st.session_state.triggered_prompt
+    st.session_state.triggered_prompt = None
+elif triage_prompt:
+    active_prompt = triage_prompt
+elif user_input:
+    active_prompt = user_input
 
 if active_prompt:
-    st.session_state.messages.append({"role": "user", "content": active_prompt})
+    # Auto title first message
+    if len(curr_session["messages"]) == 0:
+        curr_session["title"] = active_prompt[:25] + "..."
+
+    curr_session["messages"].append({"role": "user", "content": active_prompt})
     with st.chat_message("user"):
         st.markdown(active_prompt)
 
@@ -378,7 +476,7 @@ if active_prompt:
             role="user" if m["role"] == "user" else "model",
             parts=[types.Part.from_text(text=m["content"])]
         )
-        for m in st.session_state.messages
+        for m in curr_session["messages"]
     ]
 
     with st.chat_message("model"):
@@ -399,7 +497,7 @@ if active_prompt:
                         yield chunk.text
 
             answer = st.write_stream(response_generator())
-            st.session_state.messages.append({"role": "model", "content": answer})
+            curr_session["messages"].append({"role": "model", "content": answer})
 
         except APIError as e:
             if any(code in str(e) for code in ["400", "401", "403"]):
