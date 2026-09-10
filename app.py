@@ -145,11 +145,12 @@ def create_healthmate_pdf(report_text, report_type="Clinical Pathology Analysis"
     )
     return bytes(pdf.output())
 
-# 6. Session State Management with Persistence (survives refresh)
+# 6. Session + Contacts Persistence (survives refresh)
 import json
-
 import tempfile
-SESSIONS_FILE = os.path.join(tempfile.gettempdir(), "healthmate_sessions.json")
+
+SESSIONS_FILE  = os.path.join(tempfile.gettempdir(), "healthmate_sessions.json")
+CONTACTS_FILE  = os.path.join(tempfile.gettempdir(), "healthmate_contacts.json")
 
 def load_sessions():
     if os.path.exists(SESSIONS_FILE):
@@ -158,19 +159,28 @@ def load_sessions():
                 return json.load(f)
         except Exception:
             pass
-    return {
-        "Session 1": {
-            "title": "General Health Consultation",
-            "messages": [],
-            "last_analysis": None,
-            "doctor_note": None
-        }
-    }
+    return {"Session 1": {"title": "General Health Consultation", "messages": [], "last_analysis": None, "doctor_note": None}}
 
 def save_sessions(sessions_dict):
     try:
         with open(SESSIONS_FILE, "w", encoding="utf-8") as f:
             json.dump(sessions_dict, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+def load_contacts():
+    if os.path.exists(CONTACTS_FILE):
+        try:
+            with open(CONTACTS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"name1": "", "num1": "", "name2": "", "num2": ""}
+
+def save_contacts(name1, num1, name2, num2):
+    try:
+        with open(CONTACTS_FILE, "w", encoding="utf-8") as f:
+            json.dump({"name1": name1, "num1": num1, "name2": name2, "num2": num2}, f)
     except Exception:
         pass
 
@@ -180,6 +190,15 @@ if "sessions" not in st.session_state:
 
 if "current_session_id" not in st.session_state:
     st.session_state.current_session_id = list(st.session_state.sessions.keys())[0]
+
+# Load saved contacts once
+if "contacts_loaded" not in st.session_state:
+    saved_contacts = load_contacts()
+    st.session_state.saved_c_name1 = saved_contacts["name1"]
+    st.session_state.saved_c_num1  = saved_contacts["num1"]
+    st.session_state.saved_c_name2 = saved_contacts["name2"]
+    st.session_state.saved_c_num2  = saved_contacts["num2"]
+    st.session_state.contacts_loaded = True
 
 curr_session = st.session_state.sessions[st.session_state.current_session_id]
 
@@ -245,13 +264,22 @@ with st.sidebar:
 
     st.markdown("---")
     st.subheader("🚨 My Emergency Contacts")
-    st.caption("Apne family/doctor ka number daalo — emergency mein WhatsApp SOS jaayega inhe:")
+    st.caption("Number save karo — refresh ke baad bhi rahega:")
 
-    sos_name1 = st.text_input("Contact 1 Name", placeholder="e.g. Mummy / Papa", key="sos_name1")
-    sos_num1 = st.text_input("Contact 1 WhatsApp Number (+91)", placeholder="e.g. 9876543210", key="sos_num1")
+    sos_name1 = st.text_input("Contact 1 Name", value=st.session_state.saved_c_name1, placeholder="e.g. Mummy / Papa", key="sos_name1")
+    sos_num1  = st.text_input("Contact 1 WhatsApp (+91)", value=st.session_state.saved_c_num1, placeholder="e.g. 9876543210", key="sos_num1")
 
-    sos_name2 = st.text_input("Contact 2 Name", placeholder="e.g. Dr. Sharma", key="sos_name2")
-    sos_num2 = st.text_input("Contact 2 WhatsApp Number (+91)", placeholder="e.g. 9123456789", key="sos_num2")
+    sos_name2 = st.text_input("Contact 2 Name", value=st.session_state.saved_c_name2, placeholder="e.g. Dr. Sharma", key="sos_name2")
+    sos_num2  = st.text_input("Contact 2 WhatsApp (+91)", value=st.session_state.saved_c_num2, placeholder="e.g. 9123456789", key="sos_num2")
+
+    if st.button("💾 Save Contacts", use_container_width=True):
+        save_contacts(sos_name1, sos_num1, sos_name2, sos_num2)
+        st.session_state.saved_c_name1 = sos_name1
+        st.session_state.saved_c_num1  = sos_num1
+        st.session_state.saved_c_name2 = sos_name2
+        st.session_state.saved_c_num2  = sos_num2
+        st.success("✅ Contacts saved! Refresh ke baad bhi rahenge.")
+
 
     st.markdown("---")
     st.subheader("🚨 National Helpline (India)")
