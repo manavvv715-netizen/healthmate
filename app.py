@@ -294,17 +294,17 @@ else:
 st.title("HealthMate 🩺")
 st.caption(f"Active Consultation: **{curr_session['title']}** | Language: **{selected_lang}**")
 
-# EMERGENCY SOS TOP BANNER (styled card)
-with st.container(border=True):
+# EMERGENCY SOS TOP BANNER
+sos_col1, sos_col2 = st.columns([3, 1])
+with sos_col1:
     st.markdown(
-        "<div style='background-color:#ffe6e6;padding:12px;border-radius:8px;'><strong>🔴 Feeling severe distress or medical emergency?</strong></div>",
+        "<div style='background-color:#1a1a2e !important;border:2px solid #e53e3e !important;border-radius:8px;padding:10px 14px;'>"
+        "<span style='color:#ff4444 !important;font-size:16px !important;font-weight:bold !important;'>🔴 Feeling severe distress or medical emergency?</span>"
+        "</div>",
         unsafe_allow_html=True
     )
-    sos_col1, sos_col2 = st.columns([3, 1])
-    with sos_col1:
-        st.empty()
-    with sos_col2:
-        trigger_sos = st.button("🚨 TRIGGER EMERGENCY SOS", type="primary", use_container_width=True)
+with sos_col2:
+    trigger_sos = st.button("🚨 TRIGGER EMERGENCY SOS", type="primary", use_container_width=True)
 
 # Helper function to generate clean WhatsApp SOS URL
 def get_whatsapp_sos_url(phone_num, message_body):
