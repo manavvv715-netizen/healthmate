@@ -503,6 +503,18 @@ if "doctor_note" in st.session_state and st.session_state.doctor_note:
             unsafe_allow_html=True
         )
 
+# 16. Chat Input (defined early so emergency keyword check can use it)
+user_input = st.chat_input("Ask a health, lab report, or wellness question...")
+
+active_prompt = None
+if "triggered_prompt" in st.session_state and st.session_state.triggered_prompt:
+    active_prompt = st.session_state.triggered_prompt
+    st.session_state.triggered_prompt = None
+elif triage_prompt:
+    active_prompt = triage_prompt
+elif user_input:
+    active_prompt = user_input
+
 # Check if emergency is triggered either by button or user keywords
 is_emergency_triggered = False
 emergency_reason = "Critical medical distress reported by user"
@@ -511,7 +523,7 @@ if trigger_sos:
     is_emergency_triggered = True
 
 if active_prompt:
-    emergency_keywords = ["emergency", "sos", "heart attack", "chest pain", "fainted", "choking", "accident", "bleeding heavily", "bachao", "save me", "can't breathe"]
+    emergency_keywords = ["emergency", "sos", "heart attack", "chest pain", "fainted", "choking", "accident", "bleeding heavily", "bachao", "save me", "can't breathe", "help me", "dard", "takleef", "unconscious", "behosh"]
     if any(kw in active_prompt.lower() for kw in emergency_keywords):
         is_emergency_triggered = True
         emergency_reason = active_prompt
@@ -569,18 +581,6 @@ st.subheader("💬 Active Consultation Chat")
 for msg in curr_session["messages"]:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
-
-# 16. Chat Input and Streaming Generation
-user_input = st.chat_input("Ask a health, lab report, or wellness question...")
-
-active_prompt = None
-if "triggered_prompt" in st.session_state and st.session_state.triggered_prompt:
-    active_prompt = st.session_state.triggered_prompt
-    st.session_state.triggered_prompt = None
-elif triage_prompt:
-    active_prompt = triage_prompt
-elif user_input:
-    active_prompt = user_input
 
 if active_prompt:
     # Auto title first message
