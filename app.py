@@ -225,13 +225,13 @@ with st.sidebar:
 
     st.markdown("---")
     st.subheader("🚨 My Emergency Contacts")
-    st.caption("Add family/doctor to send instant WhatsApp SOS alert during critical situations:")
-    
-    sos_name1 = st.text_input("Contact 1 Name", value="Family / Guardian", key="sos_name1")
-    sos_num1 = st.text_input("Contact 1 WhatsApp (+91)", value="9876543210", key="sos_num1")
-    
-    sos_name2 = st.text_input("Contact 2 Name", value="Doctor / Friend", key="sos_name2")
-    sos_num2 = st.text_input("Contact 2 WhatsApp (+91)", value="", key="sos_num2")
+    st.caption("Apne family/doctor ka number daalo — emergency mein WhatsApp SOS jaayega inhe:")
+
+    sos_name1 = st.text_input("Contact 1 Name", placeholder="e.g. Mummy / Papa", key="sos_name1")
+    sos_num1 = st.text_input("Contact 1 WhatsApp Number (+91)", placeholder="e.g. 9876543210", key="sos_num1")
+
+    sos_name2 = st.text_input("Contact 2 Name", placeholder="e.g. Dr. Sharma", key="sos_name2")
+    sos_num2 = st.text_input("Contact 2 WhatsApp Number (+91)", placeholder="e.g. 9123456789", key="sos_num2")
 
     st.markdown("---")
     st.subheader("🚨 National Helpline (India)")
