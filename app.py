@@ -174,9 +174,12 @@ with st.sidebar:
         st.session_state.sessions[new_id] = {
             "title": f"Consultation #{new_idx}",
             "messages": [],
-            "last_analysis": None
+            "last_analysis": None,
+            "doctor_note": None
         }
         st.session_state.current_session_id = new_id
+        st.session_state.doctor_note = None
+        st.session_state.triggered_prompt = None
         st.rerun()
 
     # Multi-Language Selector (Indian Accessibility Feature)
@@ -193,6 +196,8 @@ with st.sidebar:
         prefix = "👉 " if is_active else "💬 "
         if st.button(f"{prefix}{s_data['title']}", key=f"btn_{s_id}", use_container_width=True):
             st.session_state.current_session_id = s_id
+            st.session_state.doctor_note = s_data.get("doctor_note", None)
+            st.session_state.triggered_prompt = None
             st.rerun()
 
     st.markdown("---")
@@ -323,10 +328,11 @@ with st.expander("🔬 Scan Lab Report (Blood/Lipid/Sugar) or Medicine Strip", e
     )
 
     col1, col2 = st.columns(2)
+    sess_key = st.session_state.current_session_id
     with col1:
-        img_camera = st.camera_input("Take Live Photo")
+        img_camera = st.camera_input("Take Live Photo", key=f"cam_{sess_key}")
     with col2:
-        img_upload = st.file_uploader("Or Upload Image File", type=["jpg", "jpeg", "png"])
+        img_upload = st.file_uploader("Or Upload Image File", type=["jpg", "jpeg", "png"], key=f"upload_{sess_key}")
 
     selected_image = img_camera if img_camera is not None else img_upload
 
@@ -452,6 +458,7 @@ with col_note2:
                 contents="\n".join(all_msgs) + "\n\n" + summary_prompt
             )
             st.session_state.doctor_note = note_res.text
+            curr_session["doctor_note"] = note_res.text
         else:
             st.warning("Please chat or analyze a report first so a handover note can be generated.")
 
