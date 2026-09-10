@@ -1,4 +1,4 @@
-﻿import os
+import os
 import re
 import urllib.parse
 import datetime
@@ -224,7 +224,17 @@ with st.sidebar:
     quiz_mode = st.toggle("Health Quiz Mode 🧠", value=False)
 
     st.markdown("---")
-    st.subheader("🚨 Emergency Helpline (India)")
+    st.subheader("🚨 My Emergency Contacts")
+    st.caption("Add family/doctor to send instant WhatsApp SOS alert during critical situations:")
+    
+    sos_name1 = st.text_input("Contact 1 Name", value="Family / Guardian", key="sos_name1")
+    sos_num1 = st.text_input("Contact 1 WhatsApp (+91)", value="9876543210", key="sos_num1")
+    
+    sos_name2 = st.text_input("Contact 2 Name", value="Doctor / Friend", key="sos_name2")
+    sos_num2 = st.text_input("Contact 2 WhatsApp (+91)", value="", key="sos_num2")
+
+    st.markdown("---")
+    st.subheader("🚨 National Helpline (India)")
     st.error(
         "🚑 Ambulance: **102 / 108**\n\n"
         "🚨 National Emergency: **112**\n\n"
@@ -263,6 +273,26 @@ else:
 # 9. Main Header
 st.title("HealthMate 🩺")
 st.caption(f"Active Consultation: **{curr_session['title']}** | Language: **{selected_lang}**")
+
+# EMERGENCY SOS TOP BANNER (styled card)
+with st.container(border=True):
+    st.markdown(
+        "<div style='background-color:#ffe6e6;padding:12px;border-radius:8px;'><strong>🔴 Feeling severe distress or medical emergency?</strong></div>",
+        unsafe_allow_html=True
+    )
+    sos_col1, sos_col2 = st.columns([3, 1])
+    with sos_col1:
+        st.empty()
+    with sos_col2:
+        trigger_sos = st.button("🚨 TRIGGER EMERGENCY SOS", type="primary", use_container_width=True)
+
+# Helper function to generate clean WhatsApp SOS URL
+def get_whatsapp_sos_url(phone_num, message_body):
+    clean_phone = re.sub(r"[^\d]", "", phone_num)
+    if len(clean_phone) == 10:
+        clean_phone = "91" + clean_phone
+    encoded_msg = urllib.parse.quote(message_body)
+    return f"https://api.whatsapp.com/send?phone={clean_phone}&text={encoded_msg}"
 
 # 10. OUT-OF-THE-BOX FEATURE 1: Interactive Visual Body Triage
 st.markdown("### 🧍‍♂️ Visual Symptom Triage (Where does it hurt?)")
@@ -472,6 +502,66 @@ if "doctor_note" in st.session_state and st.session_state.doctor_note:
             f'<a href="{wa_url}" target="_blank" style="display:inline-block; background-color:#25D366; color:white; padding:8px 16px; border-radius:6px; text-decoration:none; font-weight:bold;">📲 Share with Doctor on WhatsApp</a>',
             unsafe_allow_html=True
         )
+
+# Check if emergency is triggered either by button or user keywords
+is_emergency_triggered = False
+emergency_reason = "Critical medical distress reported by user"
+
+if trigger_sos:
+    is_emergency_triggered = True
+
+if active_prompt:
+    emergency_keywords = ["emergency", "sos", "heart attack", "chest pain", "fainted", "choking", "accident", "bleeding heavily", "bachao", "save me", "can't breathe"]
+    if any(kw in active_prompt.lower() for kw in emergency_keywords):
+        is_emergency_triggered = True
+        emergency_reason = active_prompt
+
+if is_emergency_triggered:
+    with st.container(border=True):
+        st.error("🚨 **CRITICAL MEDICAL EMERGENCY DETECTED!**")
+        st.markdown(
+            "HealthMate has activated the **Emergency SOS Dispatch**. "
+            "Please remain calm, sit down, keep doors unlocked for first responders, and immediately notify your emergency contacts below:"
+        )
+
+        now_str = datetime.datetime.now().strftime("%d %b %Y, %I:%M %p")
+        sos_message = (
+            "🚨 *URGENT MEDICAL SOS ALERT via HealthMate AI*\n\n"
+            f"⚠️ *Situation:* {emergency_reason}\n"
+            f"⏰ *Time:* {now_str}\n"
+            "📍 *Status:* Patient requires immediate medical assistance / family presence.\n\n"
+            "📞 *Emergency Services:* Dial 112 (National Emergency) or 108 (Ambulance) immediately!\n"
+            "— Sent via HealthMate Personal Safety System"
+        )
+
+        # Contact 1 WhatsApp Button
+        col_wa1, col_wa2, col_call = st.columns(3)
+        c1_name = st.session_state.get("sos_name1", "Contact 1")
+        c1_num = st.session_state.get("sos_num1", "")
+        if c1_num:
+            wa_url_1 = get_whatsapp_sos_url(c1_num, sos_message)
+            with col_wa1:
+                st.markdown(
+                    f'<a href="{wa_url_1}" target="_blank" style="display:block; text-align:center; background-color:#25D366; color:white; padding:10px; border-radius:8px; text-decoration:none; font-weight:bold;">📲 WhatsApp SOS: {c1_name}</a>',
+                    unsafe_allow_html=True
+                )
+
+        # Contact 2 WhatsApp Button
+        c2_name = st.session_state.get("sos_name2", "Contact 2")
+        c2_num = st.session_state.get("sos_num2", "")
+        if c2_num:
+            wa_url_2 = get_whatsapp_sos_url(c2_num, sos_message)
+            with col_wa2:
+                st.markdown(
+                    f'<a href="{wa_url_2}" target="_blank" style="display:block; text-align:center; background-color:#25D366; color:white; padding:10px; border-radius:8px; text-decoration:none; font-weight:bold;">📲 WhatsApp SOS: {c2_name}</a>',
+                    unsafe_allow_html=True
+                )
+
+        with col_call:
+            st.markdown(
+                '<a href="tel:112" style="display:block; text-align:center; background-color:#e53e3e; color:white; padding:10px; border-radius:8px; text-decoration:none; font-weight:bold;">📞 Call 112 (Ambulance)</a>',
+                unsafe_allow_html=True
+            )
 
 # 15. Replay Existing Messages
 st.markdown("---")
