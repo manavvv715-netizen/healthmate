@@ -12,7 +12,9 @@ from google.genai.errors import APIError
 
 # 1. Environment & Key Setup
 load_dotenv()
-api_key = os.getenv("GEMINI_API_KEY")
+env_api_key = os.getenv("GEMINI_API_KEY", "")
+backup_key = st.sidebar.text_input("🔑 Backup API Key (Optional)", type="password", help="If primary key hits limit, paste a fresh key here.")
+api_key = backup_key if backup_key.strip() else env_api_key
 
 # 2. Page Configuration
 st.set_page_config(
@@ -63,7 +65,27 @@ except Exception as e:
     st.stop()
 
 CHAT_MODEL = "gemini-3.5-flash-lite"
-VISION_MODEL = "gemini-3.6-flash"
+# Models with high quota (1,500/day instead of 20/day)
+VISION_MODELS = ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-flash-latest"]
+
+def call_gemini_with_fallback(client, contents, system_instruction=None, is_vision=False):
+    models = VISION_MODELS if is_vision else [CHAT_MODEL, "gemini-3.5-flash"]
+    last_error = None
+    for model_name in models:
+        try:
+            config = types.GenerateContentConfig(system_instruction=system_instruction, temperature=0.5) if system_instruction else None
+            return client.models.generate_content(
+                model=model_name,
+                contents=contents,
+                config=config
+            )
+        except Exception as e:
+            last_error = e
+            if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                continue
+            else:
+                raise e
+    raise last_error
 
 # Helper: Clean text for PDF (Guarantees Zero Emojis or weird symbols)
 def clean_for_pdf(text):
@@ -355,9 +377,10 @@ Contraindications, key side-effects, food interactions.
 ### 4. Dosage & Administration Notice
 Strict reminder to only follow the treating doctor's prescribed dosage and timing.
 """
-                    res = client.models.generate_content(
-                        model=VISION_MODEL,
-                        contents=[pil_img, vision_prompt]
+                    res = call_gemini_with_fallback(
+                        client=client,
+                        contents=[pil_img, vision_prompt],
+                        is_vision=True
                     )
                     curr_session["last_analysis"] = res.text
                     curr_session["messages"].append({"role": "model", "content": f"🔬 **Document Analysis Result:**\n\n{res.text}"})
